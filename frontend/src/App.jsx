@@ -5,7 +5,7 @@ import UploadPage from './pages/UploadPage';
 import ResultsPage from './pages/ResultsPage';
 // import DashboardPage from './pages/DashboardPage';
 import AboutPage from './pages/AboutPage';
-import './index.css'; // path to your CSS file
+import './index.css'; // path to your CSS fil
 
 function App() {
   return (
