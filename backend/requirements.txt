@@ -1,0 +1,47 @@
+# fastapi
+# uvicorn[standard]
+# numpy
+# opencv-python
+# mediapipe
+# tensorflow
+# python-multipart  # required by FastAPI for UploadFile
+# pydantic          # data validation (FastAPI dependency)
+
+# Python 3.10.11
+# pip 25.2 from C:\Users\sanja\AppData\Local\Programs\Python\Python310\lib\site-packages\pip (python 3.10)
+
+# | Library           | Version     | ✅ Compatibility | Notes                                                                                  |
+# | ----------------- | ----------- | --------------- | -------------------------------------------------------------------------------------- |
+# | **OpenCV-Python** | `4.11.0.86` | ✅               | Latest OpenCV (as of 2025). Works perfectly with MediaPipe and TensorFlow.             |
+# | **MediaPipe**     | `0.10.21`   | ✅               | Stable release — compatible with TF ≥ 2.13 and NumPy ≤ 1.26. Great for face detection. |
+# | **NumPy**         | `1.26.4`    | ✅               | Compatible with TF 2.15 and MediaPipe 0.10.x.                                          |
+# | Library           | Version                                                | ✅ Compatibility | Notes                                                                       |
+# | ----------------- | ------------------------------------------------------ | --------------- | --------------------------------------------------------------------------- |
+# | **TensorFlow**    | `2.19.1`                                               | ✅ Stable        | Fully supports Keras `.keras` models, EfficientNetB0, and GPU acceleration. |
+# | **OpenCV-Python** | `4.11.0.86`                                            | ✅               | Latest — works smoothly with MediaPipe and TF 2.19.                         |
+# | **MediaPipe**     | `0.10.21`                                              | ✅               | Fully compatible with NumPy ≤ 1.26 and TF ≥ 2.13.                           |
+# | **NumPy**         | `1.26.4`                                               | ✅               | Compatible with all above.                                                  |
+# | **FastAPI**       | `0.118.0`                                              | ✅               | Latest — includes built-in Pydantic v2 support.                             |
+# | **Uvicorn**       | `0.37.0`                                               | ✅               | Works perfectly with FastAPI 0.118.                                         |
+# | **scikit-learn**  | *(not shown yet — please run `pip show scikit-learn`)* | 🔍              | Required if you plan to retrain the classifier.                             |
+
+
+# === Core Machine Learning ===
+tensorflow==2.19.1
+numpy==1.26.4
+scikit-learn==1.5.2
+
+# === Computer Vision ===
+opencv-python==4.11.0.86
+mediapipe==0.10.21
+
+# === FastAPI Backend ===
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+python-multipart==0.0.9
+pydantic==2.9.2
+
+# === Optional (for stable runtime / compatibility) ===
+typing-extensions>=4.10.0
+protobuf>=4.25.3
+absl-py>=2.1.0

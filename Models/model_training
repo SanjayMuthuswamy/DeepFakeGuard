@@ -1,0 +1,155 @@
+# ==========================
+# Deepfake Detection Notebook
+# ==========================
+
+# Step 1: Import Libraries
+import cv2
+import os
+import numpy as np
+import mediapipe as mp
+import tensorflow as tf
+
+from tensorflow.keras import layers, models
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.applications.efficientnet import preprocess_input
+from sklearn.model_selection import train_test_split
+
+# Step 2: Setup directories
+os.makedirs("frames", exist_ok=True)
+os.makedirs("preprocessed", exist_ok=True)
+os.makedirs("features", exist_ok=True)
+
+# Step 3: Extract frames from videos
+def extract_frames(video_path, output_dir, frame_skip=5):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    cap = cv2.VideoCapture(video_path)
+    count = 0
+    saved = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if count % frame_skip == 0:
+            cv2.imwrite(os.path.join(output_dir, f"frame_{saved:05d}.jpg"), frame)
+            saved += 1
+        count += 1
+    cap.release()
+    return saved
+
+# Extract frames for all videos
+for category in ["real", "fake"]:
+    data_dir = f"data/{category}"
+    if not os.path.exists(data_dir):
+        print(f"Warning: {data_dir} does not exist. Skipping.")
+        continue
+    for vid in os.listdir(data_dir):
+        if vid.startswith("."):  # skip hidden files
+            continue
+        extract_frames(os.path.join(data_dir, vid), f"frames/{category}_{os.path.splitext(vid)[0]}")
+
+# Step 4: Preprocess frames (Face Detection + Resize)
+mp_face_detection = mp.solutions.face_detection
+face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
+
+def preprocess_frames(input_dir, output_dir, target_size=(224,224)):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    saved = 0
+    for file_name in sorted(os.listdir(input_dir)):
+        if not file_name.lower().endswith((".jpg", ".png")):
+            continue
+        frame = cv2.imread(os.path.join(input_dir, file_name))
+        if frame is None:
+            continue
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = face_detection.process(rgb_frame)
+        if results.detections:
+            for detection in results.detections:
+                bbox = detection.location_data.relative_bounding_box
+                h, w, _ = frame.shape
+                x, y, w_box, h_box = int(bbox.xmin*w), int(bbox.ymin*h), int(bbox.width*w), int(bbox.height*h)
+                face = frame[y:y+h_box, x:x+w_box]
+                if face.size == 0:
+                    continue
+                face_resized = cv2.resize(face, target_size)
+                np.save(os.path.join(output_dir, f"face_{saved:05d}.npy"), face_resized/255.0)
+                saved += 1
+    return saved
+
+# Preprocess all frames
+frame_folders = os.listdir("frames")
+for folder in frame_folders:
+    if folder.startswith("real") or folder.startswith("fake"):
+        preprocess_frames(f"frames/{folder}", f"preprocessed/{folder}")
+
+# Step 5: Extract features using EfficientNetB0
+base_model = EfficientNetB0(weights="imagenet", include_top=False, pooling="avg")
+
+def extract_features(input_dir, output_file):
+    features = []
+    for file_name in sorted(os.listdir(input_dir)):
+        if not file_name.endswith(".npy"):
+            continue
+        if file_name.startswith("."):  # skip hidden files
+            continue
+        face = np.load(os.path.join(input_dir, file_name))
+        face = np.expand_dims(face, axis=0)
+        face = preprocess_input(face * 255.0)
+        embedding = base_model.predict(face, verbose=0)
+        features.append(embedding[0])
+    features = np.array(features)
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    np.save(output_file, features)
+    return features
+
+# Extract features for all preprocessed frames
+preprocessed_folders = os.listdir("preprocessed")
+for folder in preprocessed_folders:
+    if folder.startswith("."):  # skip hidden files
+        continue
+    extract_features(f"preprocessed/{folder}", f"features/{folder}_features.npy")
+
+# Step 6: Load data and train classifier
+def load_data():
+    X, y = [], []
+    feature_files = os.listdir("features")
+    for file in feature_files:
+        if file.startswith("."):  # skip hidden files
+            continue
+        features = np.load(f"features/{file}")
+        if features.size == 0:
+            continue
+        label = 0 if file.startswith("real") else 1
+        X.append(features)
+        y.append(np.array([label]*len(features)))
+    if len(X) == 0:
+        raise ValueError("No features found. Make sure videos were processed correctly.")
+    X = np.vstack(X)
+    y = np.hstack(y)
+    return X, y
+
+def build_model(input_dim):
+    model = models.Sequential([
+        layers.Input(shape=(input_dim,)),
+        layers.Dense(256, activation="relu"),
+        layers.Dropout(0.3),
+        layers.Dense(128, activation="relu"),
+        layers.Dropout(0.3),
+        layers.Dense(1, activation="sigmoid")
+    ])
+    model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+    return model
+
+# Load features and train
+X, y = load_data()
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
+
+model = build_model(X.shape[1])
+history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=15, batch_size=32)
+
+# Save trained classifier
+model.save("deepfake_classifier.keras")
+print("Training complete and model saved as deepfake_classifier.keras")
+
+

@@ -1,0 +1,121 @@
+# ==============================
+# Deepfake Detection: Test New Video
+# ==============================
+
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+import glob
+from tensorflow.keras.models import load_model
+
+# Load the trained classifier
+classifier = load_model("deepfake_classifier.h5")
+
+# Function to preprocess a new video
+def preprocess_video(video_path, target_size=(224,224), frame_skip=5):
+    temp_frames_dir = "temp_frames"
+    temp_preprocessed_dir = "temp_preprocessed"
+    
+    os.makedirs(temp_frames_dir, exist_ok=True)
+    os.makedirs(temp_preprocessed_dir, exist_ok=True)
+    
+    # Step 1: Extract frames
+    extract_frames(video_path, temp_frames_dir, frame_skip=frame_skip)
+    
+    # Step 2: Preprocess frames (Face detection + resize)
+    preprocess_frames(temp_frames_dir, temp_preprocessed_dir, target_size=target_size)
+    
+    # Step 3: Extract features using EfficientNetB0
+    features = []
+    for file_name in sorted(os.listdir(temp_preprocessed_dir)):
+        if not file_name.endswith(".npy") or file_name.startswith("."):
+            continue
+        face = np.load(os.path.join(temp_preprocessed_dir, file_name))
+        face = np.expand_dims(face, axis=0)
+        face = preprocess_input(face * 255.0)
+        embedding = base_model.predict(face, verbose=0)
+        features.append(embedding[0])
+    
+    features = np.array(features)
+    
+    # Clean up temporary folders
+    import shutil
+    shutil.rmtree(temp_frames_dir)
+    shutil.rmtree(temp_preprocessed_dir)
+    
+    return features
+
+# Function to predict video authenticity
+def predict_video(video_path):
+    features = preprocess_video(video_path)
+    if features.shape[0] == 0:
+        print("No faces detected in the video!")
+        return
+    preds = classifier.predict(features)
+    avg_pred = np.mean(preds)
+    if avg_pred >= 0.5:
+        print(f"[RESULT] Video '{video_path}' is likely FAKE ({avg_pred:.2f})")
+    else:
+        print(f"[RESULT] Video '{video_path}' is likely REAL ({avg_pred:.2f})")
+
+import os
+import numpy as np
+import cv2
+from tensorflow.keras.models import load_model
+from tensorflow.keras.applications.efficientnet import preprocess_input
+
+# Load trained classifier
+classifier = load_model("deepfake_classifier.keras")
+
+# Function to preprocess a single image
+def preprocess_image(image_path, target_size=(224,224)):
+    frame = cv2.imread(image_path)
+    if frame is None:
+        print("Error: Could not load image.")
+        return None
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Use MediaPipe face detection
+    results = face_detection.process(rgb_frame)
+    faces = []
+    if results.detections:
+        for detection in results.detections:
+            bbox = detection.location_data.relative_bounding_box
+            h, w, _ = frame.shape
+            x, y, w_box, h_box = int(bbox.xmin*w), int(bbox.ymin*h), int(bbox.width*w), int(bbox.height*h)
+            face = frame[y:y+h_box, x:x+w_box]
+            if face.size == 0:
+                continue
+            face_resized = cv2.resize(face, target_size)
+            face_resized = face_resized / 255.0
+            face_resized = np.expand_dims(face_resized, axis=0)
+            face_resized = preprocess_input(face_resized * 255.0)
+            embedding = base_model.predict(face_resized, verbose=0)
+            faces.append(embedding[0])
+    if len(faces) == 0:
+        return None
+    return np.array(faces)
+
+# Function to predict authenticity of an image
+def predict_image(image_path):
+    features = preprocess_image(image_path)
+    if features is None or features.shape[0] == 0:
+        print("No faces detected in the image!")
+        return
+    preds = classifier.predict(features)
+    avg_pred = np.mean(preds)
+    if avg_pred >= 0.5:
+        print(f"[RESULT] Image '{image_path}' is likely FAKE ({avg_pred:.2f})")
+    else:
+        print(f"[RESULT] Image '{image_path}' is likely REAL ({avg_pred:.2f})")
+
+# Example usage
+test_input = "C:/Users/Mouneesh/Downloads/Create_a_20second_202509101555_97s2d.mp4"  # works for both .jpg and .mp4 now
+if test_input.lower().endswith((".jpg", ".jpeg", ".png")):
+    predict_image(test_input)
+elif test_input.lower().endswith((".mp4", ".avi", ".mov", ".gif")):
+    predict_video(test_input)
+else:
+    print("Unsupported file format.")
+
+
